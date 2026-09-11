@@ -8,7 +8,7 @@ Like all Laplace libraries, `gaussian_process` compiles down to plain, readable 
 
 A Gaussian process model has three separate pieces, and the library keeps them separate:
 
-1. **A kernel** $k(x, x')$ describes how correlated the function is at two inputs. Every kernel function returns the full covariance matrix $K_{ij} = k(x_i, x_j)$.
+1. **A kernel** $k(x, x')$ describes how correlated the function is at two inputs. Every kernel function returns the full covariance matrix $K\_{ij} = k(x\_i, x\_j)$.
 2. **A model builder** turns $K$ into something you can put in a model: either the marginal likelihood (Gaussian data, $f$ integrated out) or a non-centred latent function (any likelihood).
 3. **Prediction** conditions on the fit to give the function at new inputs, in `generated quantities`.
 
@@ -24,7 +24,7 @@ A **sum** (`+`) means independent components added together. A **product** (`.*`
 
 ## Kernels
 
-Every kernel comes in two forms: `<name>_cov(x, ...)` returns the $N \times N$ matrix for one set of inputs, and `<name>_cross_cov(x1, x2, ...)` returns the $N_1 \times N_2$ matrix between two sets, which is what prediction needs. Both take the same hyperparameters in the same order: inputs, amplitude, length-scale(s), then extras.
+Every kernel comes in two forms: `<name>_cov(x, ...)` returns the $N \times N$ matrix for one set of inputs, and `<name>_cross_cov(x1, x2, ...)` returns the $N\_1 \times N\_2$ matrix between two sets, which is what prediction needs. Both take the same hyperparameters in the same order: inputs, amplitude, length-scale(s), then extras.
 
 In the formulas, $r = \lvert x - x' \rvert$ is the distance between inputs and $\tau = x - x'$ the signed difference. $\alpha$ is always the marginal standard deviation (for stationary kernels, $k(x, x) = \alpha^2$) and $\rho$ a length-scale: small $\rho$ gives wiggly functions, large $\rho$ smooth ones.
 
@@ -32,35 +32,39 @@ In the formulas, $r = \lvert x - x' \rvert$ is the distance between inputs and $
 
 These depend only on the distance between inputs, so the function behaves the same everywhere.
 
-| Kernel | $k(x, x')$ | Arguments after `x` | Notes |
-| --- | --- | --- | --- |
-| `rbf` | $\alpha^2 \exp\left(-\frac{r^2}{2\rho^2}\right)$ | `alpha, rho` | Squared exponential. Infinitely smooth; wraps `gp_exp_quad_cov` |
-| `matern12` | $\alpha^2 e^{-r/\rho}$ | `alpha, rho` | Rough, nowhere differentiable; wraps `gp_exponential_cov` |
-| `matern32` | $\alpha^2 \left(1 + \frac{\sqrt{3} r}{\rho}\right) e^{-\sqrt{3} r/\rho}$ | `alpha, rho` | Once differentiable; wraps `gp_matern32_cov` |
-| `matern52` | $\alpha^2 \left(1 + \frac{\sqrt{5} r}{\rho} + \frac{5 r^2}{3\rho^2}\right) e^{-\sqrt{5} r/\rho}$ | `alpha, rho` | Twice differentiable, a good general default; wraps `gp_matern52_cov` |
-| `ornstein_uhlenbeck` | $\alpha^2 e^{-r/\rho}$ | `alpha, rho` | Identical to `matern12`, under its process name |
-| `rational_quad` | $\alpha^2 \left(1 + \frac{r^2}{2 a \rho^2}\right)^{-a}$ | `alpha, rho, a` | Mixture of RBF kernels over many length-scales; becomes `rbf` as $a \to \infty$ |
-| `periodic` | $\alpha^2 \exp\left(-\frac{2\sin^2(\pi r / p)}{\rho^2}\right)$ | `alpha, rho, p` | Repeats exactly every period `p`; wraps `gp_periodic_cov` |
-| `local_periodic` | periodic $\times$ RBF envelope | `alpha, rho, p, rho_decay` | Seasonal shape that drifts, at a speed set by `rho_decay` |
-| `rq_periodic` | periodic $\times$ RQ envelope | `alpha, rho, p, rho_rq, a` | Seasonal shape that drifts at several speeds |
-| `damped_periodic` | $\alpha^2 \cos\left(\frac{2\pi\tau}{p}\right) e^{-r/\rho}$ | `alpha, rho, p` | Oscillation whose correlation decays with distance |
-| `cosine` | $\alpha^2 \cos\left(\frac{2\pi\tau}{p}\right)$ | `alpha, p` | A single pure sinusoid (rank 2) |
-| `spectral_mixture` | $\sum\_{q} w\_q \, e^{-2\pi^2 \tau^2 v\_q} \cos(2\pi\tau\mu\_q)$ | `w, mu, v` (vectors, length Q) | Gaussian mixture in frequency space (Wilson & Adams, 2013); `mu` are frequencies (1 / period) |
-| `white` | $\sigma^2 \, \mathbf{1}[x = x']$ | `sigma` | Independent noise at each point; the cross form is all zeros |
-| `constant` | $\sigma^2$ | `sigma` | A random offset shared by every point (rank 1) |
+| Kernel | Arguments after `x` | $k(x, x')$ |
+| --- | --- | --- |
+| `rbf` | `alpha, rho` | $\alpha^2 \exp\left(-\frac{r^2}{2\rho^2}\right)$ |
+| `matern12` | `alpha, rho` | $\alpha^2 e^{-r/\rho}$ |
+| `matern32` | `alpha, rho` | $\alpha^2 \left(1 + \frac{\sqrt{3} r}{\rho}\right) e^{-\sqrt{3} r/\rho}$ |
+| `matern52` | `alpha, rho` | $\alpha^2 \left(1 + \frac{\sqrt{5} r}{\rho} + \frac{5 r^2}{3\rho^2}\right) e^{-\sqrt{5} r/\rho}$ |
+| `ornstein_uhlenbeck` | `alpha, rho` | $\alpha^2 e^{-r/\rho}$ |
+| `rational_quad` | `alpha, rho, a` | $\alpha^2 \left(1 + \frac{r^2}{2 a \rho^2}\right)^{-a}$ |
+| `periodic` | `alpha, rho, p` | $\alpha^2 \exp\left(-\frac{2\sin^2(\pi r / p)}{\rho^2}\right)$ |
+| `local_periodic` | `alpha, rho, p, rho_decay` | $\alpha^2 \exp\left(-\frac{2\sin^2(\pi r / p)}{\rho^2}\right) \exp\left(-\frac{r^2}{2\rho\_{decay}^2}\right)$ |
+| `rq_periodic` | `alpha, rho, p, rho_rq, a` | $\alpha^2 \exp\left(-\frac{2\sin^2(\pi r / p)}{\rho^2}\right) \left(1 + \frac{r^2}{2 a \rho\_{rq}^2}\right)^{-a}$ |
+| `damped_periodic` | `alpha, rho, p` | $\alpha^2 \cos\left(\frac{2\pi\tau}{p}\right) e^{-r/\rho}$ |
+| `cosine` | `alpha, p` | $\alpha^2 \cos\left(\frac{2\pi\tau}{p}\right)$ |
+| `spectral_mixture` | `w, mu, v` (vectors, length Q) | $\sum\_{q=1}^{Q} w\_q e^{-2\pi^2 \tau^2 v\_q} \cos(2\pi\tau\mu\_q)$ |
+| `white` | `sigma` | $\sigma^2 \mathbf{1}[x = x']$ |
+| `constant` | `sigma` | $\sigma^2$ |
+
+`rbf`, the three Matérns and `periodic` wrap Stan's built-in covariance functions (`gp_exp_quad_cov`, `gp_exponential_cov`, `gp_matern32_cov`, `gp_matern52_cov`, `gp_periodic_cov`), which have analytic gradients; the rest are written out in Stan. `ornstein_uhlenbeck` is identical to `matern12`, provided under its process name. `rational_quad` is a mixture of RBF kernels over many length-scales and becomes `rbf` as `a` grows. `periodic` repeats exactly every `p`; `local_periodic` and `rq_periodic` let that seasonal shape drift slowly, at one speed (`rho_decay`) or several (`rho_rq`, `a`). `damped_periodic` is an oscillation whose correlation fades with distance, and `cosine` a single pure sinusoid. `spectral_mixture` (Wilson & Adams, 2013) is a Gaussian mixture in frequency space, where `mu` are frequencies (1 / period) and `w`, `v` are positive weights and frequency variances. `white` adds independent noise at each point, and `constant` a random offset shared by every point.
 
 ### Non-stationary kernels
 
 These depend on the input values themselves, not just their distance.
 
-| Kernel | $k(x, x')$ | Arguments after `x` | Notes |
-| --- | --- | --- | --- |
-| `linear` | $\sigma\_b^2 + \sigma\_v^2 (x - c)(x' - c)$ | `sigma_b, sigma_v, c` | Bayesian linear regression; `c` is where the variance is smallest (rank 2) |
-| `polynomial` | $\left(\sigma\_v^2 \, x x' + c\right)^{d}$ | `sigma_v, c, d` | Polynomials of integer degree `d`; here `c >= 0` is an offset, not a centre |
-| `arccosine` | $1 - \theta / \pi$, with $\theta$ the angle between $x$ and $x'$ | none | Order-0 arc-cosine kernel (Cho & Saul, 2009); takes `array[] vector` inputs |
-| `wiener` | $\sigma^2 \min(x, x')$ | `sigma` | Brownian motion started at 0; times must be $\geq 0$ |
-| `brownian_bridge` | $\sigma^2 \left(\min(x, x') - \frac{x x'}{T}\right)$ | `sigma, T` | Brownian motion pinned to 0 at times 0 and `T` |
-| `integrated_ornstein_uhlenbeck` | $\frac{\alpha^2}{2\theta^3}\left(2\theta \min(s,t) + e^{-\theta s} + e^{-\theta t} - 1 - e^{-\theta \lvert s-t \rvert}\right)$ | `alpha, theta` | Integral of an OU process (Taylor, Cumberland & Sy, 1994); `theta` is the mean-reversion rate |
+| Kernel | Arguments after `x` | $k(x, x')$ |
+| --- | --- | --- |
+| `linear` | `sigma_b, sigma_v, c` | $\sigma\_b^2 + \sigma\_v^2 (x - c)(x' - c)$ |
+| `polynomial` | `sigma_v, c, d` | $\left(\sigma\_v^2 x x' + c\right)^{d}$ |
+| `arccosine` | none | $1 - \theta / \pi$, with $\theta$ the angle between $x$ and $x'$ |
+| `wiener` | `sigma` | $\sigma^2 \min(x, x')$ |
+| `brownian_bridge` | `sigma, T` | $\sigma^2 \left(\min(x, x') - \frac{x x'}{T}\right)$ |
+| `integrated_ornstein_uhlenbeck` | `alpha, theta` | $\frac{\alpha^2}{2\theta^3}\left(2\theta \min(x, x') + e^{-\theta x} + e^{-\theta x'} - 1 - e^{-\theta r}\right)$ |
+
+`linear` is Bayesian linear regression as a GP, with `c` the point where the variance is smallest. `polynomial` covers polynomials of integer degree `d >= 1`; its `c >= 0` is an offset, not a centre as in `linear`. `arccosine` is the order-0 arc-cosine kernel (Cho & Saul, 2009) and takes `array[] vector` inputs. `wiener` is Brownian motion started at 0 (times $\geq 0$), `brownian_bridge` is Brownian motion pinned to 0 at times 0 and `T`, and `integrated_ornstein_uhlenbeck` (Taylor, Cumberland & Sy, 1994) is the integral of an OU process with mean-reversion rate `theta`.
 
 ### Choosing a smoothness
 
@@ -76,8 +80,8 @@ Besides the kernels, the library has three groups of functions.
 
 | Function | Returns | Use it when |
 | --- | --- | --- |
-| `marginal_normal_lpdf(y \| mu, K, sigma)` | Log density of $y \sim \mathcal{N}(\mu, K + \sigma^2 I)$ | The likelihood is Gaussian. $f$ is integrated out analytically, so it isn't sampled at all |
-| `latent(K, z, delta)` | $f = \operatorname{chol}(K + \delta I)\, z$ | Any other likelihood (Poisson, Bernoulli, ...), or per-group GPs. Give `z ~ std_normal()` |
+| `marginal_normal_lpdf(y \| mu, K, sigma)` | $\log \mathcal{N}(y \mid \mu, K + \sigma^2 I)$ | The likelihood is Gaussian. $f$ is integrated out analytically, so it isn't sampled at all |
+| `latent(K, z, delta)` | $f = L z$, where $L L^\top = K + \delta I$ | Any other likelihood (Poisson, Bernoulli, ...), or per-group GPs. Give `z ~ std_normal()` |
 
 **Prediction**, used in `generated quantities`:
 
@@ -90,10 +94,11 @@ Besides the kernels, the library has three groups of functions.
 All three use the standard Gaussian conditioning result, computed with triangular solves rather than matrix inverses:
 
 $$
-f_* \mid y \sim \mathcal{N}\left(K_\times^\top K_y^{-1} y,\; K_* - K_\times^\top K_y^{-1} K_\times\right),
+f^{\ast} \mid y \sim \mathcal{N}\left(C^\top \Sigma^{-1} y, \quad S - C^\top \Sigma^{-1} C\right)
 $$
 
-where $K_y$ is `K` plus $\sigma^2 I$ (marginal) or $\delta I$ (latent), $K_\times$ is `K_cross` ($N \times N_{new}$) and $K_*$ is `K_star` ($N_{new} \times N_{new}$).
+Here $\Sigma$ is `K` plus $\sigma^2 I$ for the marginal model or $\delta I$ for the latent one,
+$C$ is `K_cross` (size `N × N_new`), and $S$ is `K_star` (size `N_new × N_new`).
 
 **Grouping helpers**, used once in `transformed data`, to fit a separate GP per group without scanning every row inside the model:
 
@@ -373,7 +378,7 @@ fit$draws("f_new")
 
 - **Use `target +=`, not `~`.** Laplace rewrites `gaussian_process::func(` calls, so write `target += gaussian_process::marginal_normal_lpdf(y | ...)`. The `y ~ gaussian_process::marginal_normal(...)` form won't resolve.
 - **Multiply kernels with `.*`, never `*`.** Between two matrices, `*` is a matrix product, which is not a kernel product and gives a wrong, usually invalid, covariance.
-- **In a product, only one amplitude is identified.** $\alpha_1 \alpha_2$ is all the data can see, so set every amplitude but one to `1.0`, as `local_periodic` and `rq_periodic` already do. Otherwise the sampler drifts along a ridge where one amplitude grows as the other shrinks.
+- **In a product, only one amplitude is identified.** $\alpha\_1 \alpha\_2$ is all the data can see, so set every amplitude but one to `1.0`, as `local_periodic` and `rq_periodic` already do. Otherwise the sampler drifts along a ridge where one amplitude grows as the other shrinks.
 - **Prediction needs the kernel written three times** — `K`, `K_cross`, and `K_star` — with the same kernel and hyperparameters as in `model`. The library can't check this for you, since Stan can't pass functions as arguments.
 - **Don't store `K` in `transformed parameters`.** Everything there is written to the output on every draw, and an $N \times N$ matrix quickly makes enormous CSV files. Build it in `model` and again in `generated quantities`; recomputing it is cheap by comparison.
 - **The GP mean is assumed zero in prediction.** If your model has a mean, pass `y - mu` to the prediction functions and add the mean at the new points back afterwards (or centre `y` beforehand, as in the examples).

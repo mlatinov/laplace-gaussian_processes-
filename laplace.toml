@@ -1,0 +1,4 @@
+[dependencies.gaussian_process]
+git = "https://github.com/mlatinov/laplace-gaussian_processes-"
+tag = "0.1.0"
+subdir = "laplace"

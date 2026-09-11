@@ -1,0 +1,8 @@
+root = ["gaussian_process"]
+
+[[package]]
+name = "gaussian_process"
+version = "0.1.0"
+checksum = "sha256:711b1c44f5e189a4d815afd1d9a66e410378ed39ff04a5c6f38aae442b747c02"
+source = "git+https://github.com/mlatinov/laplace-gaussian_processes-@0.1.0#laplace"
+dependencies = []

@@ -1,0 +1,876 @@
+/*
+gp — Gaussian process building blocks for Laplace
+
+Conventions
+  * Inputs are array[] real (1D). Exception: arc-cosine takes array[] vector.
+  * Every kernel has a self version  <name>_cov(x, ...)             -> N x N
+                  and a cross version <name>_cross_cov(x1, x2, ...) -> N1 x N2
+  * Argument order: (inputs, amplitude, length-scale(s), extras).
+  * Kernels return plain matrices, so they compose with + (sum) and .* (product).
+    Never use * between kernel matrices: that is a matrix product, not a kernel product.
+  * Jitter is always an explicit `delta` argument.
+
+Kernels (d = x - x', r = |d|)
+  #  Kernel             Formula                                                    Implementation
+  0  RBF / SE           a^2 exp(-r^2 / (2 l^2))                                    wraps gp_exp_quad_cov
+  1  Matern 1/2         a^2 exp(-r / l)                                            wraps gp_exponential_cov
+  2  Matern 3/2         a^2 (1 + sqrt3 r/l) exp(-sqrt3 r/l)                        wraps gp_matern32_cov
+  3  Matern 5/2         a^2 (1 + sqrt5 r/l + 5r^2/(3l^2)) exp(-sqrt5 r/l)          wraps gp_matern52_cov
+  4  Rational quad.     a^2 (1 + r^2 / (2 A l^2))^(-A)                             hand-rolled
+  5  Periodic           a^2 exp(-2 sin^2(pi r / p) / l^2)                          wraps gp_periodic_cov
+  6  Locally periodic   Periodic(a, l, p) .* RBF(1, l_decay)                       composite
+  7  Damped periodic    a^2 cos(2 pi d / p) exp(-r / l)                            hand-rolled
+  8  RQ x Periodic      Periodic(a, l, p) .* RQ(1, l_rq, A)                        composite
+  9  Spectral mixture   sum_q w_q exp(-2 pi^2 d^2 v_q) cos(2 pi d mu_q)            hand-rolled
+  10 Cosine             a^2 cos(2 pi d / p)                                        hand-rolled (rank 2)
+  11 Linear             s_b^2 + s_v^2 (x - c)(x' - c)                              hand-rolled (rank <= 2)
+  12 Polynomial         (s_v^2 x x' + c)^deg                                       hand-rolled
+  13 Arc-cosine (n=0)   1 - theta / pi,  theta = angle(x, x')                      hand-rolled, vector inputs
+  14 Wiener             s^2 min(x, x')                                             hand-rolled, non-stationary
+  15 Brownian bridge    s^2 (min(x, x') - x x' / T)                                hand-rolled, non-stationary
+  16 Ornstein-Uhlenbeck identical to Matern 1/2                                    alias of matern12
+  17 Integrated OU      a^2/(2 th^3) (2 th min + e^{-th x} + e^{-th x'} - 1 - e^{-th r})  hand-rolled
+  18 White noise        s^2 1[x = x']                                              hand-rolled, cross = 0
+  19 Constant           s^2                                                        hand-rolled (rank 1)
+
+Low-rank kernels (cosine, linear, polynomial, constant) and kernels that vanish at
+x = 0 (Wiener, bridge, integrated OU) give singular matrices: latent GPs built on
+them need jitter (delta), typically 1e-6 to 1e-9 relative to the kernel scale.
+*/
+
+// 0 RBF =====================================================================================================
+// @laplace
+// @brief Squared exponential (RBF) kernel
+// @param x Input locations
+// @param alpha Marginal standard deviation
+// @param rho Length-scale
+// @math k(x, x') = \alpha^2 \exp\left(-\frac{(x - x')^2}{2\rho^2}\right)
+// @return N x N covariance matrix
+// @example matrix[N, N] K = gp::rbf_cov(x, alpha, rho);
+matrix rbf_cov(array[] real x, real alpha, real rho){
+    return gp_exp_quad_cov(x, alpha, rho);
+}
+// @laplace
+// @brief Squared exponential (RBF) cross-covariance
+// @param x1 First set of input locations (size N1)
+// @param x2 Second set of input locations (size N2)
+// @param alpha Marginal standard deviation
+// @param rho Length-scale
+// @math K_{ij} = \alpha^2 \exp\left(-\frac{(x_{1i} - x_{2j})^2}{2\rho^2}\right)
+// @return N1 x N2 cross-covariance matrix
+matrix rbf_cross_cov(array[] real x1, array[] real x2, real alpha, real rho){
+    return gp_exp_quad_cov(x1, x2, alpha, rho);
+}
+
+// 1 Matern 1/2 Kernel =====================================================================================
+// alpha - marginal std dev, 
+// rho   - length-scale
+// @laplace
+// @brief Matern 1/2 (exponential) kernel; rough, nowhere-differentiable samples
+// @param x Input locations
+// @param alpha Marginal standard deviation
+// @param rho Length-scale
+// @math k(x, x') = \alpha^2 \exp\left(-\frac{|x - x'|}{\rho}\right)
+// @return N x N covariance matrix
+matrix matern12_cov(array[] real x, real alpha, real rho){
+    return gp_exponential_cov(x, alpha, rho);
+}
+// @laplace
+// @brief Matern 1/2 cross-covariance
+// @param x1 First set of input locations (size N1)
+// @param x2 Second set of input locations (size N2)
+// @param alpha Marginal standard deviation
+// @param rho Length-scale
+// @math K_{ij} = \alpha^2 \exp\left(-\frac{|x_{1i} - x_{2j}|}{\rho}\right)
+// @return N1 x N2 cross-covariance matrix
+matrix matern12_cross_cov(array[] real x1, array[] real x2, real alpha, real rho){
+    return gp_exponential_cov(x1, x2, alpha, rho);
+}
+
+// 2 Matérn 3/2 =======================================================================================
+// @laplace
+// @brief Matern 3/2 kernel; once-differentiable samples
+// @param x Input locations
+// @param alpha Marginal standard deviation
+// @param rho Length-scale
+// @math k(x, x') = \alpha^2 \left(1 + \frac{\sqrt{3}\,r}{\rho}\right) \exp\left(-\frac{\sqrt{3}\,r}{\rho}\right), \quad r = |x - x'|
+// @return N x N covariance matrix
+matrix matern32_cov(array[] real x, real alpha, real rho){
+    return gp_matern32_cov(x, alpha, rho);
+}
+// @laplace
+// @brief Matern 3/2 cross-covariance
+// @param x1 First set of input locations (size N1)
+// @param x2 Second set of input locations (size N2)
+// @param alpha Marginal standard deviation
+// @param rho Length-scale
+// @return N1 x N2 cross-covariance matrix
+matrix matern32_cross_cov(array[] real x1, array[] real x2, real alpha, real rho){
+    return gp_matern32_cov(x1, x2, alpha, rho);
+}
+
+// 3 Matérn 5/2 ===================================================================================
+// @laplace
+// @brief Matern 5/2 kernel; twice-differentiable samples, a good general default
+// @param x Input locations
+// @param alpha Marginal standard deviation
+// @param rho Length-scale
+// @math k(x, x') = \alpha^2 \left(1 + \frac{\sqrt{5}\,r}{\rho} + \frac{5r^2}{3\rho^2}\right) \exp\left(-\frac{\sqrt{5}\,r}{\rho}\right), \quad r = |x - x'|
+// @return N x N covariance matrix
+matrix matern52_cov(array[] real x, real alpha, real rho){
+    return gp_matern52_cov(x, alpha, rho);
+}
+// @laplace
+// @brief Matern 5/2 cross-covariance
+// @param x1 First set of input locations (size N1)
+// @param x2 Second set of input locations (size N2)
+// @param alpha Marginal standard deviation
+// @param rho Length-scale
+// @return N1 x N2 cross-covariance matrix
+matrix matern52_cross_cov(array[] real x1, array[] real x2, real alpha, real rho){
+    return gp_matern52_cov(x1, x2, alpha, rho);
+}
+
+// 4 Rational Quadratic ====================================================================================================================
+// @laplace
+// @brief Rational quadratic kernel; a scale mixture of RBF kernels over many length-scales
+// @param x Input locations
+// @param alpha Marginal standard deviation
+// @param rho Length-scale
+// @param a Scale-mixture parameter (> 0); as a -> infinity the kernel becomes RBF
+// @math k(x, x') = \alpha^2 \left(1 + \frac{(x - x')^2}{2 a \rho^2}\right)^{-a}
+// @return N x N covariance matrix
+matrix rational_quad_cov(array[] real x, real alpha, real rho , real a){
+    if (!(alpha > 0 && rho > 0 && a > 0))
+        reject("gp::rational_quad_cov: alpha, rho and a must be positive");
+    int N = size(x);
+    matrix[N, N] K;
+    real alpha2 = square(alpha);
+    real denom  = 2 * a * square(rho);
+
+    for(i in 1:N){
+        for(j in 1:N){
+            real r2 = square(x[i] - x[j]);
+            K[i, j] = alpha2 * pow(1 + r2 / denom, -a);
+        }
+    }
+    return K;
+}
+// @laplace
+// @brief Rational quadratic cross-covariance
+// @param x1 First set of input locations (size N1)
+// @param x2 Second set of input locations (size N2)
+// @param alpha Marginal standard deviation
+// @param rho Length-scale
+// @param a Scale-mixture parameter (> 0)
+// @return N1 x N2 cross-covariance matrix
+matrix rational_quad_cross_cov(array[] real x1, array[] real x2, real alpha, real rho , real a){
+    if (!(alpha > 0 && rho > 0 && a > 0))
+        reject("gp::rational_quad_cross_cov: alpha, rho and a must be positive");
+    int N1 = size(x1);
+    int N2 = size(x2);
+    matrix[N1, N2] K;
+    real alpha2 = square(alpha);
+    real denom  = 2 * a * square(rho);
+
+    for(i in 1:N1){
+        for(j in 1:N2){
+            real r2 = square(x1[i] - x2[j]);
+            K[i, j] = alpha2 * pow(1 + r2 / denom, -a);
+        }
+    }
+    return K;
+}
+
+// 5 Periodic / Exp-Sine-Squared =====================================================================
+// @laplace
+// @brief Periodic (exp-sine-squared) kernel; functions repeat exactly every p
+// @param x Input locations
+// @param alpha Marginal standard deviation
+// @param rho Length-scale within one period (not comparable to the RBF length-scale)
+// @param p Period
+// @math k(x, x') = \alpha^2 \exp\left(-\frac{2\sin^2(\pi |x - x'| / p)}{\rho^2}\right)
+// @return N x N covariance matrix
+matrix periodic_cov(array[] real x, real alpha, real rho, real p){
+    return gp_periodic_cov(x, alpha, rho, p);
+}
+// @laplace
+// @brief Periodic cross-covariance
+// @param x1 First set of input locations (size N1)
+// @param x2 Second set of input locations (size N2)
+// @param alpha Marginal standard deviation
+// @param rho Length-scale within one period
+// @param p Period
+// @return N1 x N2 cross-covariance matrix
+matrix periodic_cross_cov(array[] real x1, array[] real x2, real alpha, real rho, real p){
+    return gp_periodic_cov(x1, x2, alpha, rho, p);
+}
+
+// 6 Locally Periodic ================================================================================
+// @laplace
+// @brief Locally periodic kernel; a seasonal shape that drifts slowly over time
+// @param x Input locations
+// @param alpha Marginal standard deviation (the RBF factor has amplitude 1 for identifiability)
+// @param rho Length-scale within one period
+// @param p Period
+// @param rho_decay RBF length-scale controlling how fast the periodic shape changes
+// @math k(x, x') = \alpha^2 \exp\left(-\frac{2\sin^2(\pi r / p)}{\rho^2}\right) \exp\left(-\frac{r^2}{2\rho_{decay}^2}\right)
+// @return N x N covariance matrix
+matrix local_periodic_cov(array[] real x, real alpha, real rho, real p, real rho_decay){
+    return periodic_cov(x, alpha, rho, p) .* rbf_cov(x, 1.0, rho_decay);
+}
+// @laplace
+// @brief Locally periodic cross-covariance
+// @param x1 First set of input locations (size N1)
+// @param x2 Second set of input locations (size N2)
+// @param alpha Marginal standard deviation
+// @param rho Length-scale within one period
+// @param p Period
+// @param rho_decay RBF length-scale of the envelope
+// @return N1 x N2 cross-covariance matrix
+matrix local_periodic_cross_cov(array[] real x1, array[] real x2, real alpha, real rho, real p, real rho_decay){
+    return periodic_cross_cov(x1, x2, alpha, rho, p) .* rbf_cross_cov(x1, x2, 1.0, rho_decay);
+}
+
+// 7 Damped Periodic ==================================================================================
+// @laplace
+// @brief Damped cosine kernel; oscillations whose correlation decays with distance
+// @param x Input locations
+// @param alpha Marginal standard deviation
+// @param rho Decay length-scale of the exponential envelope
+// @param p Period of the oscillation
+// @math k(x, x') = \alpha^2 \cos\left(\frac{2\pi (x - x')}{p}\right) \exp\left(-\frac{|x - x'|}{\rho}\right)
+// @return N x N covariance matrix
+matrix damped_periodic_cov(array[] real x, real alpha, real rho, real p){
+    int N = size(x);
+    matrix[N, N] K;
+    real alpha2 = square(alpha);
+
+    for(i in 1:N){
+        for(j in 1:N){
+            real d     = x[i] - x[j];
+            real exp1  = cos(2 * pi() * d / p);
+            real exp2  = exp(-abs(d) / rho);
+            K[i, j]    = alpha2 * exp1 * exp2; 
+        }
+    }
+    return K;
+}
+// @laplace
+// @brief Damped cosine cross-covariance
+// @param x1 First set of input locations (size N1)
+// @param x2 Second set of input locations (size N2)
+// @param alpha Marginal standard deviation
+// @param rho Decay length-scale
+// @param p Period
+// @return N1 x N2 cross-covariance matrix
+matrix damped_periodic_cross_cov(array[] real x1, array[] real x2, real alpha, real rho, real p){
+    int N1 = size(x1);
+    int N2 = size(x2);
+    matrix[N1, N2] K;
+    real alpha2 = square(alpha);
+
+    for(i in 1:N1){
+        for(j in 1:N2){
+            real d     = x1[i] - x2[j];
+            real exp1  = cos(2 * pi() * d / p);
+            real exp2  = exp(-abs(d) / rho);
+            K[i, j]    = alpha2 * exp1 * exp2; 
+        }
+    }
+    return K;
+}
+
+// 8 RQ × Periodic ==================================================================================
+// @laplace
+// @brief Periodic kernel modulated by a rational quadratic envelope (multi-scale drift)
+// @param x Input locations
+// @param alpha Marginal standard deviation (the RQ factor has amplitude 1 for identifiability)
+// @param rho Length-scale within one period
+// @param p Period
+// @param rho_rq RQ length-scale of the envelope
+// @param a RQ scale-mixture parameter (> 0)
+// @math k(x, x') = k_{per}(x, x'; \alpha, \rho, p)\; k_{RQ}(x, x'; 1, \rho_{rq}, a)
+// @return N x N covariance matrix
+matrix rq_periodic_cov(array[] real x, real alpha, real rho, real p, real rho_rq, real a){
+    return periodic_cov(x, alpha, rho, p) .* rational_quad_cov(x, 1.0, rho_rq, a);
+}
+// @laplace
+// @brief RQ x periodic cross-covariance
+// @param x1 First set of input locations (size N1)
+// @param x2 Second set of input locations (size N2)
+// @param alpha Marginal standard deviation
+// @param rho Length-scale within one period
+// @param p Period
+// @param rho_rq RQ length-scale of the envelope
+// @param a RQ scale-mixture parameter (> 0)
+// @return N1 x N2 cross-covariance matrix
+matrix rq_periodic_cross_cov(array[] real x1, array[] real x2, real alpha, real rho, real p, real rho_rq, real a){
+    return periodic_cross_cov(x1, x2, alpha, rho, p) .* rational_quad_cross_cov(x1, x2, 1.0, rho_rq, a);
+}
+
+// 9 Spectral Mixture =================================================================================
+// @laplace
+// @brief Spectral mixture kernel (Wilson & Adams, 2013); a Gaussian mixture in frequency space
+// @param x Input locations
+// @param w Component weights (variances), length Q, all > 0
+// @param mu Component mean frequencies (1 / period), length Q
+// @param v Component frequency variances (> 0), length Q; larger v = faster decay
+// @math k(\tau) = \sum_{q=1}^{Q} w_q \exp\left(-2\pi^2 \tau^2 v_q\right) \cos\left(2\pi \tau \mu_q\right), \quad \tau = x - x'
+// @return N x N covariance matrix
+matrix spectral_mixture_cov(array[] real x, vector w, vector mu, vector v){
+    int Q = num_elements(w);
+    if (num_elements(mu) != Q || num_elements(v) != Q)
+        reject("gp::spectral_mixture_cov: w, mu and v must have the same length");
+    int N = size(x);
+    matrix[N, N] K;
+
+    for(i in 1:N){
+        for(j in 1:N){
+            real tau = x[i] - x[j];
+            K[i, j]  = 0;
+            for(q in 1:Q){
+                K[i, j] += w[q] * exp(-2 * square(pi()) * square(tau) * v[q]) * cos(2 * pi() * tau * mu[q]);
+            }
+        }
+    }
+    return K;
+}
+// @laplace
+// @brief Spectral mixture cross-covariance
+// @param x1 First set of input locations (size N1)
+// @param x2 Second set of input locations (size N2)
+// @param w Component weights, length Q
+// @param mu Component mean frequencies, length Q
+// @param v Component frequency variances, length Q
+// @return N1 x N2 cross-covariance matrix
+matrix spectral_mixture_cross_cov(array[] real x1, array[] real x2 ,vector w, vector mu, vector v){
+    int Q = num_elements(w);
+    if (num_elements(mu) != Q || num_elements(v) != Q)
+        reject("gp::spectral_mixture_cross_cov: w, mu and v must have the same length");
+    int N1 = size(x1);
+    int N2 = size(x2);
+    matrix[N1, N2] K;
+
+    for(i in 1:N1){
+        for(j in 1:N2){
+            real tau = x1[i] - x2[j];
+            K[i, j]  = 0;
+            for(q in 1:Q){
+                K[i, j] += w[q] * exp(-2 * square(pi()) * square(tau) * v[q]) * cos(2 * pi() * tau * mu[q]);
+            }
+        }
+    }
+    return K;
+}
+
+// 10 Cosine kernel ===================================================================================
+// @laplace
+// @brief Cosine kernel; a single pure sinusoid of fixed period (rank 2, needs jitter)
+// @param x Input locations
+// @param alpha Marginal standard deviation
+// @param p Period
+// @math k(x, x') = \alpha^2 \cos\left(\frac{2\pi (x - x')}{p}\right)
+// @return N x N covariance matrix
+matrix cosine_cov(array[] real x, real alpha, real p){
+    int N = size(x);
+    matrix[N, N] K;
+
+    for(i in 1:N){
+        for(j in 1:N){
+            real r  = 2 * pi() * (x[i] - x[j]);
+            K[i, j] = square(alpha) * cos(r / p); 
+        }
+    }
+    return K;
+}
+// @laplace
+// @brief Cosine cross-covariance
+// @param x1 First set of input locations (size N1)
+// @param x2 Second set of input locations (size N2)
+// @param alpha Marginal standard deviation
+// @param p Period
+// @return N1 x N2 cross-covariance matrix
+matrix cosine_cross_cov(array[] real x1, array[] real x2, real alpha, real p){
+    int N1 = size(x1);
+    int N2 = size(x2);
+    matrix[N1, N2] K;
+
+    for(i in 1:N1){
+        for(j in 1:N2){
+            real r  = 2 * pi() * (x1[i] - x2[j]);
+            K[i, j] = square(alpha) * cos(r / p); 
+        }
+    }
+    return K;
+}
+
+// 11 Linear Kernel =============================================================================================
+// @laplace
+// @brief Linear kernel; Bayesian linear regression as a GP (non-stationary, rank <= 2)
+// @param x Input locations
+// @param sigma_b Intercept standard deviation
+// @param sigma_v Slope standard deviation
+// @param c Location where the variance is smallest
+// @math k(x, x') = \sigma_b^2 + \sigma_v^2 (x - c)(x' - c)
+// @return N x N covariance matrix
+matrix linear_cov(array[] real x, real sigma_b, real sigma_v, real c){
+    int N = size(x);
+    matrix[N, N] K;
+
+    for(i in 1:N){
+        for(j in 1:N){
+            real r  = (x[i] - c) * (x[j] - c);
+            K[i, j] = square(sigma_b) + square(sigma_v) * r;
+        }
+    }
+    return K;
+}
+// @laplace
+// @brief Linear cross-covariance
+// @param x1 First set of input locations (size N1)
+// @param x2 Second set of input locations (size N2)
+// @param sigma_b Intercept standard deviation
+// @param sigma_v Slope standard deviation
+// @param c Location where the variance is smallest
+// @return N1 x N2 cross-covariance matrix
+matrix linear_cross_cov(array[] real x1, array[] real x2, real sigma_b, real sigma_v, real c){
+    int N1 = size(x1);
+    int N2 = size(x2);
+    matrix[N1, N2] K;
+
+    for(i in 1:N1){
+        for(j in 1:N2){
+            real r  = (x1[i] - c) * (x2[j] - c);
+            K[i, j] = square(sigma_b) + square(sigma_v) * r;
+        }
+    }
+    return K;
+}
+
+// 12 Polynomial kernel ===========================================================================
+// @laplace
+// @brief Polynomial kernel; GP over polynomials of degree d (non-stationary, low rank)
+// @param x Input locations
+// @param sigma_v Scale of the input product
+// @param c Offset (>= 0); note this is NOT the centre c of the linear kernel
+// @param d Polynomial degree (>= 1)
+// @math k(x, x') = \left(\sigma_v^2\, x x' + c\right)^{d}
+// @return N x N covariance matrix
+matrix polynomial_cov(array[] real x, real sigma_v, real c, int d){
+    if (c < 0 || d < 1) reject("gp::polynomial_cov: need c >= 0 and d >= 1");
+    int N = size(x);
+    matrix[N, N] K;
+
+    for(i in 1:N){
+        for(j in 1:N){
+            K[i, j] = pow(square(sigma_v) * x[i] * x[j] + c, d);
+        }
+    }
+    return K;
+}
+// @laplace
+// @brief Polynomial cross-covariance
+// @param x1 First set of input locations (size N1)
+// @param x2 Second set of input locations (size N2)
+// @param sigma_v Scale of the input product
+// @param c Offset (>= 0)
+// @param d Polynomial degree (>= 1)
+// @return N1 x N2 cross-covariance matrix
+matrix polynomial_cross_cov(array[] real x1, array[] real x2, real sigma_v, real c, int d){
+    if (c < 0 || d < 1) reject("gp::polynomial_cross_cov: need c >= 0 and d >= 1");
+    int N1 = size(x1);
+    int N2 = size(x2);
+    matrix[N1, N2] K;
+
+    for(i in 1:N1){
+        for(j in 1:N2){
+            K[i, j] = pow(square(sigma_v) * x1[i] * x2[j] + c, d);
+        }
+    }
+    return K;
+}
+
+// 13 ArcCosine kernel ==============================================================================
+// @laplace
+// @brief Arc-cosine kernel of order 0 (Cho & Saul, 2009); infinite network of step-function units
+// @param x Input vectors (multi-dimensional; must be non-zero)
+// @math k(x, x') = 1 - \frac{\theta}{\pi}, \quad \theta = \arccos\left(\frac{x \cdot x'}{\|x\|\,\|x'\|}\right)
+// @return N x N covariance matrix
+matrix arccosine_cov(array[] vector x){
+    int N = size(x);
+    matrix[N, N] K;
+    vector[N] nrm;
+    for(i in 1:N){
+        nrm[i] = norm2(x[i]);
+        if (nrm[i] == 0) reject("gp::arccosine_cov: input vectors must be non-zero");
+    }
+
+    for(i in 1:N){
+        for(j in 1:N){
+            real cosine = dot_product(x[i], x[j]) / (nrm[i] * nrm[j]);
+            cosine      = fmin(1.0, fmax(-1.0, cosine));
+            real theta  = acos(cosine);
+            K[i, j]     = 1 - theta / pi();
+        }
+    }
+    return K;
+}
+// @laplace
+// @brief Arc-cosine (order 0) cross-covariance
+// @param x1 First set of input vectors (size N1; non-zero)
+// @param x2 Second set of input vectors (size N2; non-zero)
+// @return N1 x N2 cross-covariance matrix
+matrix arccosine_cross_cov(array[] vector x1, array[] vector x2){
+    int N1 = size(x1);
+    int N2 = size(x2);
+    matrix[N1, N2] K;
+    vector[N1] n1;
+    vector[N2] n2;
+    for(i in 1:N1) n1[i] = norm2(x1[i]);
+    for(j in 1:N2) n2[j] = norm2(x2[j]);
+    if (min(n1) == 0 || min(n2) == 0)
+        reject("gp::arccosine_cross_cov: input vectors must be non-zero");
+
+    for(i in 1:N1){
+        for(j in 1:N2){
+            real cosine = dot_product(x1[i], x2[j]) / (n1[i] * n2[j]);
+            cosine      = fmin(1.0, fmax(-1.0, cosine));
+            real theta  = acos(cosine);
+            K[i, j]     = 1 - theta / pi();
+        }
+    }
+    return K;
+}
+
+// 14 Wiener kernel ===========================================================================
+// @laplace
+// @brief Wiener (Brownian motion) kernel, started at 0 at time 0
+// @param x Times (>= 0)
+// @param sigma Diffusion standard deviation per unit time
+// @math k(x, x') = \sigma^2 \min(x, x')
+// @return N x N covariance matrix
+matrix wiener_cov(array[] real x, real sigma){
+    if (min(x) < 0) reject("gp::wiener_cov: times must be >= 0");
+    int N = size(x);
+    matrix[N, N] K;
+
+    for(i in 1:N){
+        for(j in 1:N){
+            real r  = fmin(x[i], x[j]);
+            K[i, j] = square(sigma) * r; 
+        }
+    }
+    return K;
+}
+// @laplace
+// @brief Wiener cross-covariance
+// @param x1 First set of times (>= 0, size N1)
+// @param x2 Second set of times (>= 0, size N2)
+// @param sigma Diffusion standard deviation per unit time
+// @return N1 x N2 cross-covariance matrix
+matrix wiener_cross_cov(array[] real x1, array[] real x2, real sigma){
+    if (min(x1) < 0 || min(x2) < 0) reject("gp::wiener_cross_cov: times must be >= 0");
+    int N1 = size(x1);
+    int N2 = size(x2);
+    matrix[N1, N2] K;
+
+    for(i in 1:N1){
+        for(j in 1:N2){
+            real r  = fmin(x1[i], x2[j]);
+            K[i, j] = square(sigma) * r; 
+        }
+    }
+    return K;
+}
+
+// 15 Brownian bridge kernel ======================================================================
+// @laplace
+// @brief Brownian bridge kernel; Brownian motion pinned to 0 at times 0 and T
+// @param x Times in [0, T]
+// @param sigma Diffusion standard deviation per unit time
+// @param T End time of the bridge (> 0)
+// @math k(x, x') = \sigma^2 \left(\min(x, x') - \frac{x\, x'}{T}\right)
+// @return N x N covariance matrix
+matrix brownian_bridge_cov(array[] real x, real sigma, real T){
+    if (T <= 0 || min(x) < 0 || max(x) > T)
+        reject("gp::brownian_bridge_cov: need T > 0 and 0 <= x <= T");
+    int N = size(x);
+    matrix[N, N] K;
+
+    for(i in 1:N){
+        for(j in 1:N){
+            real m   = fmin(x[i], x[j]);
+            K[i, j]  = square(sigma) * (m - (x[i] * x[j]) / T);
+        }
+    }
+    return K;
+}
+// @laplace
+// @brief Brownian bridge cross-covariance
+// @param x1 First set of times in [0, T] (size N1)
+// @param x2 Second set of times in [0, T] (size N2)
+// @param sigma Diffusion standard deviation per unit time
+// @param T End time of the bridge (> 0)
+// @return N1 x N2 cross-covariance matrix
+matrix brownian_bridge_cross_cov(array[] real x1, array[] real x2, real sigma, real T){
+    if (T <= 0 || min(x1) < 0 || min(x2) < 0 || max(x1) > T || max(x2) > T)
+        reject("gp::brownian_bridge_cross_cov: need T > 0 and 0 <= x <= T");
+    int N1 = size(x1);
+    int N2 = size(x2);
+    matrix[N1, N2] K;
+
+    for(i in 1:N1){
+        for(j in 1:N2){
+            real m   = fmin(x1[i], x2[j]);
+            K[i, j]  = square(sigma) * (m - (x1[i] * x2[j]) / T);
+        }
+    }
+    return K;
+}
+
+// 16 OU kernel =======================================================================
+// @laplace
+// @brief Ornstein-Uhlenbeck kernel; identical to Matern 1/2, provided under its process name
+// @param x Input locations (times)
+// @param alpha Stationary standard deviation
+// @param rho Correlation time (1 / mean-reversion rate)
+// @math k(x, x') = \alpha^2 \exp\left(-\frac{|x - x'|}{\rho}\right)
+// @return N x N covariance matrix
+matrix ornstein_uhlenbeck_cov(array[] real x, real alpha, real rho){
+    return matern12_cov(x, alpha, rho);
+}
+// @laplace
+// @brief Ornstein-Uhlenbeck cross-covariance (alias of matern12_cross_cov)
+// @param x1 First set of input locations (size N1)
+// @param x2 Second set of input locations (size N2)
+// @param alpha Stationary standard deviation
+// @param rho Correlation time
+// @return N1 x N2 cross-covariance matrix
+matrix ornstein_uhlenbeck_cross_cov(array[] real x1, array[] real x2, real alpha, real rho){
+    return matern12_cross_cov(x1, x2, alpha, rho);
+}
+
+// 17 Integrated OU kernel ======================================================================
+// @laplace
+// @brief Integrated Ornstein-Uhlenbeck kernel (Taylor, Cumberland & Sy, 1994); integral of an OU velocity started at 0
+// @param x Times (>= 0)
+// @param alpha Diffusion scale of the underlying OU process
+// @param theta Mean-reversion rate of the underlying OU process (> 0)
+// @math k(s, t) = \frac{\alpha^2}{2\theta^3}\left(2\theta \min(s,t) + e^{-\theta s} + e^{-\theta t} - 1 - e^{-\theta |s - t|}\right)
+// @return N x N covariance matrix
+matrix integrated_ornstein_uhlenbeck_cov(array[] real x, real alpha, real theta){
+    if (theta <= 0 || min(x) < 0)
+        reject("gp::integrated_ornstein_uhlenbeck_cov: need theta > 0 and times >= 0");
+    int N = size(x);
+    matrix[N, N] K;
+    real scale = square(alpha) / (2 * pow(theta, 3));
+
+    for(i in 1:N){
+        for(j in 1:N){
+            real m   = fmin(x[i], x[j]);
+            real r   = abs(x[i] - x[j]);
+            K[i, j]  = scale * (2 * theta * m + exp(-theta * x[i]) + exp(-theta * x[j]) - 1 - exp(-theta * r)); 
+        }
+    }
+    return K;
+}
+// @laplace
+// @brief Integrated Ornstein-Uhlenbeck cross-covariance
+// @param x1 First set of times (>= 0, size N1)
+// @param x2 Second set of times (>= 0, size N2)
+// @param alpha Diffusion scale of the underlying OU process
+// @param theta Mean-reversion rate (> 0)
+// @return N1 x N2 cross-covariance matrix
+matrix integrated_ornstein_uhlenbeck_cross_cov(array[] real x1, array[] real x2, real alpha, real theta){
+    if (theta <= 0 || min(x1) < 0 || min(x2) < 0)
+        reject("gp::integrated_ornstein_uhlenbeck_cross_cov: need theta > 0 and times >= 0");
+    int N1 = size(x1);
+    int N2 = size(x2);
+    matrix[N1, N2] K;
+    real scale = square(alpha) / (2 * pow(theta, 3));
+
+    for(i in 1:N1){
+        for(j in 1:N2){
+            real m   = fmin(x1[i], x2[j]);
+            real r   = abs(x1[i] - x2[j]);
+            K[i, j]  = scale * (2 * theta * m + exp(-theta * x1[i]) + exp(-theta * x2[j]) - 1 - exp(-theta * r)); 
+        }
+    }
+    return K;
+}
+
+// 18 White noise kernel ==========================================================================
+// @laplace
+// @brief White noise kernel; independent noise at each observation
+// @param x Input locations (only the size is used)
+// @param sigma Noise standard deviation
+// @math k(x_i, x_j) = \sigma^2 \,\mathbf{1}[i = j]
+// @return N x N diagonal covariance matrix
+matrix white_cov(array[] real x, real sigma){
+    int N = size(x);
+    return diag_matrix(rep_vector(square(sigma), N));
+}
+// @laplace
+// @brief White noise cross-covariance; zero, since distinct train and test points share no noise
+// @param x1 First set of input locations (size N1)
+// @param x2 Second set of input locations (size N2)
+// @param sigma Noise standard deviation (unused; kept for a uniform signature)
+// @return N1 x N2 matrix of zeros
+matrix white_cross_cov(array[] real x1, array[] real x2, real sigma){
+    return rep_matrix(0, size(x1), size(x2));
+}
+
+// 19 Constant kernel =============================================================================
+// @laplace
+// @brief Constant kernel; a random offset shared by all points (rank 1)
+// @param x Input locations (only the size is used)
+// @param sigma Standard deviation of the shared offset
+// @math k(x, x') = \sigma^2
+// @return N x N covariance matrix
+matrix constant_cov(array[] real x, real sigma){
+    int N = size(x);
+    return rep_matrix(square(sigma), N, N);
+}
+// @laplace
+// @brief Constant cross-covariance
+// @param x1 First set of input locations (size N1)
+// @param x2 Second set of input locations (size N2)
+// @param sigma Standard deviation of the shared offset
+// @return N1 x N2 covariance matrix
+matrix constant_cross_cov(array[] real x1, array[] real x2, real sigma){
+    return rep_matrix(square(sigma), size(x1), size(x2));
+}
+
+// Implementation =============================================================================================
+// @laplace
+// @brief Non-centred latent GP draw: f = chol(K + delta I) z
+// @param K N x N kernel matrix
+// @param z Standard-normal vector of length N (declare as a parameter with z ~ std_normal())
+// @param delta Diagonal jitter for numerical stability
+// @math f = L z, \quad L L^\top = K + \delta I, \quad z \sim \mathcal{N}(0, I) \;\Rightarrow\; f \sim \mathcal{N}(0, K + \delta I)
+// @return Vector of latent function values, length N
+// @example vector[N] f = gp::latent(gp::matern52_cov(x, alpha, rho), z, 1e-9);
+vector latent(matrix K, vector z, real delta) {
+    return cholesky_decompose(add_diag(K, delta)) * z;
+}
+// @laplace
+// @brief Marginal GP likelihood for Gaussian observations, with the latent f integrated out
+// @param y Observations, length N
+// @param mu Mean vector, length N
+// @param K N x N kernel matrix
+// @param sigma Observation noise standard deviation
+// @math y \sim \mathcal{N}\left(\mu,\; K + \sigma^2 I\right)
+// @return Log density
+// @example y ~ gp::marginal_normal(rep_vector(0, N), gp::rbf_cov(x, alpha, rho), sigma);
+real marginal_normal_lpdf(vector y, vector mu, matrix K, real sigma){
+    matrix[rows(K), cols(K)] L = cholesky_decompose(add_diag(K, square(sigma)));
+    return multi_normal_cholesky_lpdf(y | mu, L);
+}
+
+// Predictions ===========================================================================================
+// @laplace
+// @brief Posterior mean of f at new points under the marginal (Gaussian) model
+// @param y Observations, length N (pass y - mu if the model has a non-zero mean)
+// @param K N x N training kernel matrix
+// @param K_cross N x N_new cross-covariance between training and new points
+// @param sigma Observation noise standard deviation
+// @math \mathbb{E}[f_* \mid y] = K_\times^\top (K + \sigma^2 I)^{-1} y
+// @return Posterior mean, length N_new
+vector predict_marginal_mean(vector y, matrix K, matrix K_cross, real sigma){
+    int N      = rows(K);
+    int N_star = cols(K_cross);
+    matrix[N, N] L        = cholesky_decompose(add_diag(K, square(sigma)));
+    matrix[N, N_star] W   = mdivide_left_tri_low(L, K_cross);
+    return W' * mdivide_left_tri_low(L, y);
+}
+// @laplace
+// @brief Posterior draw of f at new points under the marginal (Gaussian) model
+// @param y Observations, length N (pass y - mu if the model has a non-zero mean)
+// @param K N x N training kernel matrix
+// @param K_cross N x N_new cross-covariance between training and new points
+// @param K_star N_new x N_new kernel matrix at the new points
+// @param sigma Observation noise standard deviation
+// @param delta Diagonal jitter added to the predictive covariance
+// @math f_* \mid y \sim \mathcal{N}\left(K_\times^\top K_y^{-1} y,\; K_* - K_\times^\top K_y^{-1} K_\times\right), \quad K_y = K + \sigma^2 I
+// @return One draw of the noise-free f_*, length N_new; add normal_rng(f_*, sigma) for new observations
+vector predict_marginal_rng(vector y, matrix K, matrix K_cross, matrix K_star, real sigma, real delta){
+    int N      = rows(K);
+    int N_star = cols(K_cross);
+    matrix[N, N] L        = cholesky_decompose(add_diag(K, square(sigma)));
+    matrix[N, N_star] W   = mdivide_left_tri_low(L, K_cross);
+    vector[N_star] mu_star = W' * mdivide_left_tri_low(L, y);
+    matrix[N_star, N_star] S = K_star - crossprod(W);
+    // Numerical cleanup
+    S = 0.5 * (S + S');
+    S = add_diag(S, delta);
+
+    return multi_normal_rng(mu_star, S);
+}
+// @laplace
+// @brief Conditional draw of f at new points given latent values f (non-Gaussian / latent models)
+// @param f Latent function values at training points, length N (e.g. from gp::latent)
+// @param K N x N training kernel matrix
+// @param K_cross N x N_new cross-covariance between training and new points
+// @param K_star N_new x N_new kernel matrix at the new points
+// @param delta Jitter; use the same value as in gp::latent
+// @math f_* \mid f \sim \mathcal{N}\left(K_\times^\top K_\delta^{-1} f,\; K_* - K_\times^\top K_\delta^{-1} K_\times\right), \quad K_\delta = K + \delta I
+// @return One draw of f_*, length N_new
+vector predict_latent_rng(vector f, matrix K, matrix K_cross, matrix K_star, real delta){
+    int N      = rows(K);
+    int N_star = cols(K_cross);
+    matrix[N, N] L        = cholesky_decompose(add_diag(K, delta));
+    matrix[N, N_star] W   = mdivide_left_tri_low(L, K_cross);
+    vector[N_star] mu_star = W' * mdivide_left_tri_low(L, f);
+    matrix[N_star, N_star] S = K_star - crossprod(W);
+    S = 0.5 * (S + S');
+    S = add_diag(S, delta);
+
+    return multi_normal_rng(mu_star, S);
+}
+
+// Grouping Helpers
+// @laplace
+// @brief Number of observations in each group
+// @param id Group index for each observation, values in 1..J
+// @param J Number of groups
+// @return Array of group sizes, length J
+array[] int group_sizes(array[] int id, int J) {
+    int N = size(id);
+    array[J] int sizes;
+    sizes = rep_array(0, J);
+
+    for (n in 1:N) {
+        if (id[n] < 1 || id[n] > J) reject("gp::group_sizes: id values must be in 1..J");
+        sizes[id[n]] += 1;
+    }
+
+    return sizes;
+}
+// @laplace
+// @brief Starting position of each group in the group-sorted order
+// @param sizes Group sizes, length J (from group_sizes)
+// @math s_1 = 1, \quad s_j = s_{j-1} + n_{j-1}
+// @return Array of start positions, length J
+array[] int group_starts(array[] int sizes) {
+    int J = size(sizes);
+    array[J] int starts;
+    starts[1] = 1;
+
+    for (j in 2:J) {
+        starts[j] = starts[j - 1] + sizes[j - 1];
+    }
+
+    return starts;
+}
+// @laplace
+// @brief Original row indices belonging to group j
+// @param ord Row indices sorted by group, from sort_indices_asc(id)
+// @param starts Group start positions (from group_starts)
+// @param sizes Group sizes (from group_sizes)
+// @param j Group index
+// @return Array of row indices for group j, length sizes[j]
+// @example f[idx] = gp::latent(gp::rbf_cov(x[idx], alpha[j], rho[j]), z[idx], delta);
+array[] int group_rows(array[] int ord, array[] int starts, array[] int sizes, int j){
+    return ord[starts[j]:(starts[j] + sizes[j] - 1)];
+}

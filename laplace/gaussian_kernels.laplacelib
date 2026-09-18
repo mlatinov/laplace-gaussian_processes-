@@ -46,7 +46,7 @@ them need jitter (delta), typically 1e-6 to 1e-9 relative to the kernel scale.
 // @param rho Length-scale
 // @math k(x, x') = \alpha^2 \exp\left(-\frac{(x - x')^2}{2\rho^2}\right)
 // @return N x N covariance matrix
-// @example matrix[N, N] K = gp::rbf_cov(x, alpha, rho);
+// @example matrix[N, N] K = gaussian_process::rbf_cov(x, alpha, rho);
 matrix rbf_cov(array[] real x, real alpha, real rho){
     return gp_exp_quad_cov(x, alpha, rho);
 }
@@ -750,7 +750,7 @@ matrix constant_cross_cov(array[] real x1, array[] real x2, real sigma){
 // @param delta Diagonal jitter for numerical stability
 // @math f = L z, \quad L L^\top = K + \delta I, \quad z \sim \mathcal{N}(0, I) \;\Rightarrow\; f \sim \mathcal{N}(0, K + \delta I)
 // @return Vector of latent function values, length N
-// @example vector[N] f = gp::latent(gp::matern52_cov(x, alpha, rho), z, 1e-9);
+// @example vector[N] f = gaussian_process::latent(gaussian_process::matern52_cov(x, alpha, rho), z, 1e-9);
 vector latent(matrix K, vector z, real delta) {
     return cholesky_decompose(add_diag(K, delta)) * z;
 }
@@ -762,7 +762,7 @@ vector latent(matrix K, vector z, real delta) {
 // @param sigma Observation noise standard deviation
 // @math y \sim \mathcal{N}\left(\mu,\; K + \sigma^2 I\right)
 // @return Log density
-// @example y ~ gp::marginal_normal(rep_vector(0, N), gp::rbf_cov(x, alpha, rho), sigma);
+// @example y ~ gaussian_process::marginal_normal(rep_vector(0, N), gaussian_process::rbf_cov(x, alpha, rho), sigma);
 real marginal_normal_lpdf(vector y, vector mu, matrix K, real sigma){
     matrix[rows(K), cols(K)] L = cholesky_decompose(add_diag(K, square(sigma)));
     return multi_normal_cholesky_lpdf(y | mu, L);
@@ -870,7 +870,7 @@ array[] int group_starts(array[] int sizes) {
 // @param sizes Group sizes (from group_sizes)
 // @param j Group index
 // @return Array of row indices for group j, length sizes[j]
-// @example f[idx] = gp::latent(gp::rbf_cov(x[idx], alpha[j], rho[j]), z[idx], delta);
+// @example f[idx] = gaussian_process::latent(gaussian_process::rbf_cov(x[idx], alpha[j], rho[j]), z[idx], delta);
 array[] int group_rows(array[] int ord, array[] int starts, array[] int sizes, int j){
     return ord[starts[j]:(starts[j] + sizes[j] - 1)];
 }

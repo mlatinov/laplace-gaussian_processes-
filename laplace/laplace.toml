@@ -1,5 +1,5 @@
 name = "gaussian_process"
-version = "0.1.0"
+version = "0.1.1"
 exports = [
     "rbf_cov",
     "matern12_cov",

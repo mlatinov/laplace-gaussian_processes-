@@ -50,6 +50,7 @@ them need jitter (delta), typically 1e-6 to 1e-9 relative to the kernel scale.
 pub matrix rbf_cov(array[] real x, real alpha, real rho){
     return gp_exp_quad_cov(x, alpha, rho);
 }
+
 // @laplace
 // @brief Squared exponential (RBF) cross-covariance
 // @param x1 First set of input locations (size N1)

@@ -18,9 +18,8 @@ pub @template gaussian_regression_matern_52(
     $rho_prior   : expr,
     $sigma_prior : expr
     ){
-    
-    // Model Parameters
-    parameters {
+    parameters{
+        // Model Parameters
         real<lower=0> ${name}_alpha;
         real<lower=0> ${name}_rho;
         real<lower=0> ${name}_sigma;
@@ -37,8 +36,8 @@ pub @template gaussian_regression_matern_52(
         // Model Likelihood
         target += marginal_normal_lpdf($y | rep_vector(0, size($x)), ${name}_K, ${name}_sigma);
     }
-    // Model Predictions in Generated Quantities
     generated quantities {
+
         vector[size($x_new)] ${name}_f_new = predict_marginal_rng(
             $y,
             matern52_cov($x, ${name}_alpha, ${name}_rho),
@@ -70,16 +69,17 @@ pub @template gaussian_regression_rbf(
     $sigma_prior : expr
     ){
     
-    // Model Parameters    
+      
     parameters{
+        // Model Parameters 
         real<lower=0> ${name}_alpha;
         real<lower=0> ${name}_rho;
         real<lower=0> ${name}_sigma;
     }
-    // Model 
+
     model{
         // Build Cov Matrix
-        matrix[size(x), size(x)] ${name}_K = rbf_cov($x, ${name}_alpha,  ${name}_rho);
+        matrix[size($x), size($x)] ${name}_K = rbf_cov($x, ${name}_alpha,  ${name}_rho);
 
         // Model Priors
         ${name}_alpha ~ $alpha_prior;
@@ -89,8 +89,9 @@ pub @template gaussian_regression_rbf(
         // Model Likelihood 
         target += marginal_normal_lpdf($y | rep_vector(0, size($x)), ${name}_K, ${name}_sigma);
     }
-    // Model Predictions in Generated Quantities
+    
     generated quantities {
+        // Model Predictions in Generated Quantities
         vector[size($x_new)] ${name}_f_new = predict_marginal_rng(
             $y,
             rbf_cov($x, ${name}_alpha, ${name}_rho),

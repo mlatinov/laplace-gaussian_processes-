@@ -1,0 +1,104 @@
+// Gaussian process regression and prediction =================================================================================================
+//@laplace
+//@brief Gaussian process regression (Matérn 5/2 kernel) with posterior predictions
+//@param ident $name        : Prefix for every created variable.
+//@param expr  $x           : Training inputs, array[N] vector[D].
+//@param expr  $y           : Training outcomes, vector[N].
+//@param expr  $x_new       : Prediction inputs, array[M] vector[D].
+//@param expr  $alpha_prior : Prior for the marginal standard deviation.
+//@param expr  $rho_prior   : Prior for the length-scale.
+//@param expr  $sigma_prior : Prior for the noise standard deviation.
+//@return Creates $name_alpha, $name_rho, $name_sigma (parameters), $name_f_new, $name_y_new (generated quantities).
+pub @template gaussian_regression_matern_52(
+    $name        : ident,
+    $x           : expr,
+    $y           : expr,
+    $x_new       : expr,
+    $alpha_prior : expr,
+    $rho_prior   : expr,
+    $sigma_prior : expr
+    ){
+    parameters{
+        // Model Parameters
+        real<lower=0> ${name}_alpha;
+        real<lower=0> ${name}_rho;
+        real<lower=0> ${name}_sigma;
+    }
+    model{
+        // Build Covariance Matrix
+        matrix[size($x), size($x)] ${name}_K = matern52_cov($x, ${name}_alpha, ${name}_rho);
+        
+        // Model Priors
+        ${name}_alpha ~ $alpha_prior;
+        ${name}_rho   ~ $rho_prior;
+        ${name}_sigma ~ $sigma_prior;
+        
+        // Model Likelihood
+        target += marginal_normal_lpdf($y | rep_vector(0, size($x)), ${name}_K, ${name}_sigma);
+    }
+    generated quantities {
+
+        vector[size($x_new)] ${name}_f_new = predict_marginal_rng(
+            $y,
+            matern52_cov($x, ${name}_alpha, ${name}_rho),
+            matern52_cross_cov($x, $x_new, ${name}_alpha, ${name}_rho),
+            matern52_cov($x_new, ${name}_alpha, ${name}_rho),
+            ${name}_sigma, 1e-9
+        );
+        array[size($x_new)] real ${name}_y_new = normal_rng(${name}_f_new, ${name}_sigma);
+    }
+}
+
+//@laplace
+//@brief Gaussian process regression (Squared Exponential kernel) with posterior predictions
+//@param ident $name        : Prefix for every created variable.
+//@param expr  $x           : Training inputs, array[N] vector[D].
+//@param expr  $y           : Training outcomes, vector[N].
+//@param expr  $x_new       : Prediction inputs, array[M] vector[D].
+//@param expr  $alpha_prior : Prior for the marginal standard deviation.
+//@param expr  $rho_prior   : Prior for the length-scale.
+//@param expr  $sigma_prior : Prior for the noise standard deviation.
+//@return Creates $name_alpha, $name_rho, $name_sigma (parameters), $name_f_new, $name_y_new (generated quantities).
+pub @template gaussian_regression_rbf(
+    $name : ident,
+    $x    : expr,
+    $y    : expr,
+    $x_new : expr,
+    $alpha_prior : expr,
+    $rho_prior   : expr,
+    $sigma_prior : expr
+    ){
+    
+      
+    parameters{
+        // Model Parameters 
+        real<lower=0> ${name}_alpha;
+        real<lower=0> ${name}_rho;
+        real<lower=0> ${name}_sigma;
+    }
+
+    model{
+        // Build Cov Matrix
+        matrix[size($x), size($x)] ${name}_K = rbf_cov($x, ${name}_alpha,  ${name}_rho);
+
+        // Model Priors
+        ${name}_alpha ~ $alpha_prior;
+        ${name}_rho   ~ $rho_prior;
+        ${name}_sigma ~ $sigma_prior;
+
+        // Model Likelihood 
+        target += marginal_normal_lpdf($y | rep_vector(0, size($x)), ${name}_K, ${name}_sigma);
+    }
+    
+    generated quantities {
+        // Model Predictions in Generated Quantities
+        vector[size($x_new)] ${name}_f_new = predict_marginal_rng(
+            $y,
+            rbf_cov($x, ${name}_alpha, ${name}_rho),
+            rbf_cross_cov($x, $x_new, ${name}_alpha, ${name}_rho),
+            rbf_cov($x_new, ${name}_alpha, ${name}_rho),
+            ${name}_sigma, 1e-9
+        );
+        array[size($x_new)] real ${name}_y_new = normal_rng(${name}_f_new, ${name}_sigma);
+    }
+}

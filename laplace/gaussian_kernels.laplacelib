@@ -47,9 +47,10 @@ them need jitter (delta), typically 1e-6 to 1e-9 relative to the kernel scale.
 // @math k(x, x') = \alpha^2 \exp\left(-\frac{(x - x')^2}{2\rho^2}\right)
 // @return N x N covariance matrix
 // @example matrix[N, N] K = gaussian_process::rbf_cov(x, alpha, rho);
-matrix rbf_cov(array[] real x, real alpha, real rho){
+pub matrix rbf_cov(array[] real x, real alpha, real rho){
     return gp_exp_quad_cov(x, alpha, rho);
 }
+
 // @laplace
 // @brief Squared exponential (RBF) cross-covariance
 // @param x1 First set of input locations (size N1)
@@ -58,7 +59,7 @@ matrix rbf_cov(array[] real x, real alpha, real rho){
 // @param rho Length-scale
 // @math K_{ij} = \alpha^2 \exp\left(-\frac{(x_{1i} - x_{2j})^2}{2\rho^2}\right)
 // @return N1 x N2 cross-covariance matrix
-matrix rbf_cross_cov(array[] real x1, array[] real x2, real alpha, real rho){
+pub matrix rbf_cross_cov(array[] real x1, array[] real x2, real alpha, real rho){
     return gp_exp_quad_cov(x1, x2, alpha, rho);
 }
 
@@ -72,7 +73,7 @@ matrix rbf_cross_cov(array[] real x1, array[] real x2, real alpha, real rho){
 // @param rho Length-scale
 // @math k(x, x') = \alpha^2 \exp\left(-\frac{|x - x'|}{\rho}\right)
 // @return N x N covariance matrix
-matrix matern12_cov(array[] real x, real alpha, real rho){
+pub matrix matern12_cov(array[] real x, real alpha, real rho){
     return gp_exponential_cov(x, alpha, rho);
 }
 // @laplace
@@ -83,7 +84,7 @@ matrix matern12_cov(array[] real x, real alpha, real rho){
 // @param rho Length-scale
 // @math K_{ij} = \alpha^2 \exp\left(-\frac{|x_{1i} - x_{2j}|}{\rho}\right)
 // @return N1 x N2 cross-covariance matrix
-matrix matern12_cross_cov(array[] real x1, array[] real x2, real alpha, real rho){
+pub matrix matern12_cross_cov(array[] real x1, array[] real x2, real alpha, real rho){
     return gp_exponential_cov(x1, x2, alpha, rho);
 }
 
@@ -95,7 +96,7 @@ matrix matern12_cross_cov(array[] real x1, array[] real x2, real alpha, real rho
 // @param rho Length-scale
 // @math k(x, x') = \alpha^2 \left(1 + \frac{\sqrt{3}\,r}{\rho}\right) \exp\left(-\frac{\sqrt{3}\,r}{\rho}\right), \quad r = |x - x'|
 // @return N x N covariance matrix
-matrix matern32_cov(array[] real x, real alpha, real rho){
+pub matrix matern32_cov(array[] real x, real alpha, real rho){
     return gp_matern32_cov(x, alpha, rho);
 }
 // @laplace
@@ -105,7 +106,7 @@ matrix matern32_cov(array[] real x, real alpha, real rho){
 // @param alpha Marginal standard deviation
 // @param rho Length-scale
 // @return N1 x N2 cross-covariance matrix
-matrix matern32_cross_cov(array[] real x1, array[] real x2, real alpha, real rho){
+pub matrix matern32_cross_cov(array[] real x1, array[] real x2, real alpha, real rho){
     return gp_matern32_cov(x1, x2, alpha, rho);
 }
 
@@ -117,7 +118,7 @@ matrix matern32_cross_cov(array[] real x1, array[] real x2, real alpha, real rho
 // @param rho Length-scale
 // @math k(x, x') = \alpha^2 \left(1 + \frac{\sqrt{5}\,r}{\rho} + \frac{5r^2}{3\rho^2}\right) \exp\left(-\frac{\sqrt{5}\,r}{\rho}\right), \quad r = |x - x'|
 // @return N x N covariance matrix
-matrix matern52_cov(array[] real x, real alpha, real rho){
+pub matrix matern52_cov(array[] real x, real alpha, real rho){
     return gp_matern52_cov(x, alpha, rho);
 }
 // @laplace
@@ -127,7 +128,7 @@ matrix matern52_cov(array[] real x, real alpha, real rho){
 // @param alpha Marginal standard deviation
 // @param rho Length-scale
 // @return N1 x N2 cross-covariance matrix
-matrix matern52_cross_cov(array[] real x1, array[] real x2, real alpha, real rho){
+pub matrix matern52_cross_cov(array[] real x1, array[] real x2, real alpha, real rho){
     return gp_matern52_cov(x1, x2, alpha, rho);
 }
 
@@ -140,7 +141,7 @@ matrix matern52_cross_cov(array[] real x1, array[] real x2, real alpha, real rho
 // @param a Scale-mixture parameter (> 0); as a -> infinity the kernel becomes RBF
 // @math k(x, x') = \alpha^2 \left(1 + \frac{(x - x')^2}{2 a \rho^2}\right)^{-a}
 // @return N x N covariance matrix
-matrix rational_quad_cov(array[] real x, real alpha, real rho , real a){
+pub matrix rational_quad_cov(array[] real x, real alpha, real rho , real a){
     if (!(alpha > 0 && rho > 0 && a > 0))
         reject("gaussian_process::rational_quad_cov: alpha, rho and a must be positive");
     int N = size(x);
@@ -164,7 +165,7 @@ matrix rational_quad_cov(array[] real x, real alpha, real rho , real a){
 // @param rho Length-scale
 // @param a Scale-mixture parameter (> 0)
 // @return N1 x N2 cross-covariance matrix
-matrix rational_quad_cross_cov(array[] real x1, array[] real x2, real alpha, real rho , real a){
+pub matrix rational_quad_cross_cov(array[] real x1, array[] real x2, real alpha, real rho , real a){
     if (!(alpha > 0 && rho > 0 && a > 0))
         reject("gaussian_process::rational_quad_cross_cov: alpha, rho and a must be positive");
     int N1 = size(x1);
@@ -191,7 +192,7 @@ matrix rational_quad_cross_cov(array[] real x1, array[] real x2, real alpha, rea
 // @param p Period
 // @math k(x, x') = \alpha^2 \exp\left(-\frac{2\sin^2(\pi |x - x'| / p)}{\rho^2}\right)
 // @return N x N covariance matrix
-matrix periodic_cov(array[] real x, real alpha, real rho, real p){
+pub matrix periodic_cov(array[] real x, real alpha, real rho, real p){
     return gp_periodic_cov(x, alpha, rho, p);
 }
 // @laplace
@@ -202,7 +203,7 @@ matrix periodic_cov(array[] real x, real alpha, real rho, real p){
 // @param rho Length-scale within one period
 // @param p Period
 // @return N1 x N2 cross-covariance matrix
-matrix periodic_cross_cov(array[] real x1, array[] real x2, real alpha, real rho, real p){
+pub matrix periodic_cross_cov(array[] real x1, array[] real x2, real alpha, real rho, real p){
     return gp_periodic_cov(x1, x2, alpha, rho, p);
 }
 
@@ -216,7 +217,7 @@ matrix periodic_cross_cov(array[] real x1, array[] real x2, real alpha, real rho
 // @param rho_decay RBF length-scale controlling how fast the periodic shape changes
 // @math k(x, x') = \alpha^2 \exp\left(-\frac{2\sin^2(\pi r / p)}{\rho^2}\right) \exp\left(-\frac{r^2}{2\rho_{decay}^2}\right)
 // @return N x N covariance matrix
-matrix local_periodic_cov(array[] real x, real alpha, real rho, real p, real rho_decay){
+pub matrix local_periodic_cov(array[] real x, real alpha, real rho, real p, real rho_decay){
     return periodic_cov(x, alpha, rho, p) .* rbf_cov(x, 1.0, rho_decay);
 }
 // @laplace
@@ -228,7 +229,7 @@ matrix local_periodic_cov(array[] real x, real alpha, real rho, real p, real rho
 // @param p Period
 // @param rho_decay RBF length-scale of the envelope
 // @return N1 x N2 cross-covariance matrix
-matrix local_periodic_cross_cov(array[] real x1, array[] real x2, real alpha, real rho, real p, real rho_decay){
+pub matrix local_periodic_cross_cov(array[] real x1, array[] real x2, real alpha, real rho, real p, real rho_decay){
     return periodic_cross_cov(x1, x2, alpha, rho, p) .* rbf_cross_cov(x1, x2, 1.0, rho_decay);
 }
 
@@ -241,7 +242,7 @@ matrix local_periodic_cross_cov(array[] real x1, array[] real x2, real alpha, re
 // @param p Period of the oscillation
 // @math k(x, x') = \alpha^2 \cos\left(\frac{2\pi (x - x')}{p}\right) \exp\left(-\frac{|x - x'|}{\rho}\right)
 // @return N x N covariance matrix
-matrix damped_periodic_cov(array[] real x, real alpha, real rho, real p){
+pub matrix damped_periodic_cov(array[] real x, real alpha, real rho, real p){
     int N = size(x);
     matrix[N, N] K;
     real alpha2 = square(alpha);
@@ -264,7 +265,7 @@ matrix damped_periodic_cov(array[] real x, real alpha, real rho, real p){
 // @param rho Decay length-scale
 // @param p Period
 // @return N1 x N2 cross-covariance matrix
-matrix damped_periodic_cross_cov(array[] real x1, array[] real x2, real alpha, real rho, real p){
+pub matrix damped_periodic_cross_cov(array[] real x1, array[] real x2, real alpha, real rho, real p){
     int N1 = size(x1);
     int N2 = size(x2);
     matrix[N1, N2] K;
@@ -292,7 +293,7 @@ matrix damped_periodic_cross_cov(array[] real x1, array[] real x2, real alpha, r
 // @param a RQ scale-mixture parameter (> 0)
 // @math k(x, x') = k_{per}(x, x'; \alpha, \rho, p)\; k_{RQ}(x, x'; 1, \rho_{rq}, a)
 // @return N x N covariance matrix
-matrix rq_periodic_cov(array[] real x, real alpha, real rho, real p, real rho_rq, real a){
+pub matrix rq_periodic_cov(array[] real x, real alpha, real rho, real p, real rho_rq, real a){
     return periodic_cov(x, alpha, rho, p) .* rational_quad_cov(x, 1.0, rho_rq, a);
 }
 // @laplace
@@ -305,7 +306,7 @@ matrix rq_periodic_cov(array[] real x, real alpha, real rho, real p, real rho_rq
 // @param rho_rq RQ length-scale of the envelope
 // @param a RQ scale-mixture parameter (> 0)
 // @return N1 x N2 cross-covariance matrix
-matrix rq_periodic_cross_cov(array[] real x1, array[] real x2, real alpha, real rho, real p, real rho_rq, real a){
+pub matrix rq_periodic_cross_cov(array[] real x1, array[] real x2, real alpha, real rho, real p, real rho_rq, real a){
     return periodic_cross_cov(x1, x2, alpha, rho, p) .* rational_quad_cross_cov(x1, x2, 1.0, rho_rq, a);
 }
 
@@ -318,7 +319,7 @@ matrix rq_periodic_cross_cov(array[] real x1, array[] real x2, real alpha, real 
 // @param v Component frequency variances (> 0), length Q; larger v = faster decay
 // @math k(\tau) = \sum_{q=1}^{Q} w_q \exp\left(-2\pi^2 \tau^2 v_q\right) \cos\left(2\pi \tau \mu_q\right), \quad \tau = x - x'
 // @return N x N covariance matrix
-matrix spectral_mixture_cov(array[] real x, vector w, vector mu, vector v){
+pub matrix spectral_mixture_cov(array[] real x, vector w, vector mu, vector v){
     int Q = num_elements(w);
     if (num_elements(mu) != Q || num_elements(v) != Q)
         reject("gaussian_process::spectral_mixture_cov: w, mu and v must have the same length");
@@ -344,7 +345,7 @@ matrix spectral_mixture_cov(array[] real x, vector w, vector mu, vector v){
 // @param mu Component mean frequencies, length Q
 // @param v Component frequency variances, length Q
 // @return N1 x N2 cross-covariance matrix
-matrix spectral_mixture_cross_cov(array[] real x1, array[] real x2 ,vector w, vector mu, vector v){
+pub matrix spectral_mixture_cross_cov(array[] real x1, array[] real x2 ,vector w, vector mu, vector v){
     int Q = num_elements(w);
     if (num_elements(mu) != Q || num_elements(v) != Q)
         reject("gaussian_process::spectral_mixture_cross_cov: w, mu and v must have the same length");
@@ -372,7 +373,7 @@ matrix spectral_mixture_cross_cov(array[] real x1, array[] real x2 ,vector w, ve
 // @param p Period
 // @math k(x, x') = \alpha^2 \cos\left(\frac{2\pi (x - x')}{p}\right)
 // @return N x N covariance matrix
-matrix cosine_cov(array[] real x, real alpha, real p){
+pub matrix cosine_cov(array[] real x, real alpha, real p){
     int N = size(x);
     matrix[N, N] K;
 
@@ -391,7 +392,7 @@ matrix cosine_cov(array[] real x, real alpha, real p){
 // @param alpha Marginal standard deviation
 // @param p Period
 // @return N1 x N2 cross-covariance matrix
-matrix cosine_cross_cov(array[] real x1, array[] real x2, real alpha, real p){
+pub matrix cosine_cross_cov(array[] real x1, array[] real x2, real alpha, real p){
     int N1 = size(x1);
     int N2 = size(x2);
     matrix[N1, N2] K;
@@ -414,7 +415,7 @@ matrix cosine_cross_cov(array[] real x1, array[] real x2, real alpha, real p){
 // @param c Location where the variance is smallest
 // @math k(x, x') = \sigma_b^2 + \sigma_v^2 (x - c)(x' - c)
 // @return N x N covariance matrix
-matrix linear_cov(array[] real x, real sigma_b, real sigma_v, real c){
+pub matrix linear_cov(array[] real x, real sigma_b, real sigma_v, real c){
     int N = size(x);
     matrix[N, N] K;
 
@@ -434,7 +435,7 @@ matrix linear_cov(array[] real x, real sigma_b, real sigma_v, real c){
 // @param sigma_v Slope standard deviation
 // @param c Location where the variance is smallest
 // @return N1 x N2 cross-covariance matrix
-matrix linear_cross_cov(array[] real x1, array[] real x2, real sigma_b, real sigma_v, real c){
+pub matrix linear_cross_cov(array[] real x1, array[] real x2, real sigma_b, real sigma_v, real c){
     int N1 = size(x1);
     int N2 = size(x2);
     matrix[N1, N2] K;
@@ -457,7 +458,7 @@ matrix linear_cross_cov(array[] real x1, array[] real x2, real sigma_b, real sig
 // @param d Polynomial degree (>= 1)
 // @math k(x, x') = \left(\sigma_v^2\, x x' + c\right)^{d}
 // @return N x N covariance matrix
-matrix polynomial_cov(array[] real x, real sigma_v, real c, int d){
+pub matrix polynomial_cov(array[] real x, real sigma_v, real c, int d){
     if (c < 0 || d < 1) reject("gaussian_process::polynomial_cov: need c >= 0 and d >= 1");
     int N = size(x);
     matrix[N, N] K;
@@ -477,7 +478,7 @@ matrix polynomial_cov(array[] real x, real sigma_v, real c, int d){
 // @param c Offset (>= 0)
 // @param d Polynomial degree (>= 1)
 // @return N1 x N2 cross-covariance matrix
-matrix polynomial_cross_cov(array[] real x1, array[] real x2, real sigma_v, real c, int d){
+pub matrix polynomial_cross_cov(array[] real x1, array[] real x2, real sigma_v, real c, int d){
     if (c < 0 || d < 1) reject("gaussian_process::polynomial_cross_cov: need c >= 0 and d >= 1");
     int N1 = size(x1);
     int N2 = size(x2);
@@ -497,7 +498,7 @@ matrix polynomial_cross_cov(array[] real x1, array[] real x2, real sigma_v, real
 // @param x Input vectors (multi-dimensional; must be non-zero)
 // @math k(x, x') = 1 - \frac{\theta}{\pi}, \quad \theta = \arccos\left(\frac{x \cdot x'}{\|x\|\,\|x'\|}\right)
 // @return N x N covariance matrix
-matrix arccosine_cov(array[] vector x){
+pub matrix arccosine_cov(array[] vector x){
     int N = size(x);
     matrix[N, N] K;
     vector[N] nrm;
@@ -521,7 +522,7 @@ matrix arccosine_cov(array[] vector x){
 // @param x1 First set of input vectors (size N1; non-zero)
 // @param x2 Second set of input vectors (size N2; non-zero)
 // @return N1 x N2 cross-covariance matrix
-matrix arccosine_cross_cov(array[] vector x1, array[] vector x2){
+pub matrix arccosine_cross_cov(array[] vector x1, array[] vector x2){
     int N1 = size(x1);
     int N2 = size(x2);
     matrix[N1, N2] K;
@@ -550,7 +551,7 @@ matrix arccosine_cross_cov(array[] vector x1, array[] vector x2){
 // @param sigma Diffusion standard deviation per unit time
 // @math k(x, x') = \sigma^2 \min(x, x')
 // @return N x N covariance matrix
-matrix wiener_cov(array[] real x, real sigma){
+pub matrix wiener_cov(array[] real x, real sigma){
     if (min(x) < 0) reject("gaussian_process::wiener_cov: times must be >= 0");
     int N = size(x);
     matrix[N, N] K;
@@ -569,7 +570,7 @@ matrix wiener_cov(array[] real x, real sigma){
 // @param x2 Second set of times (>= 0, size N2)
 // @param sigma Diffusion standard deviation per unit time
 // @return N1 x N2 cross-covariance matrix
-matrix wiener_cross_cov(array[] real x1, array[] real x2, real sigma){
+pub matrix wiener_cross_cov(array[] real x1, array[] real x2, real sigma){
     if (min(x1) < 0 || min(x2) < 0) reject("gaussian_process::wiener_cross_cov: times must be >= 0");
     int N1 = size(x1);
     int N2 = size(x2);
@@ -592,7 +593,7 @@ matrix wiener_cross_cov(array[] real x1, array[] real x2, real sigma){
 // @param T End time of the bridge (> 0)
 // @math k(x, x') = \sigma^2 \left(\min(x, x') - \frac{x\, x'}{T}\right)
 // @return N x N covariance matrix
-matrix brownian_bridge_cov(array[] real x, real sigma, real T){
+pub matrix brownian_bridge_cov(array[] real x, real sigma, real T){
     if (T <= 0 || min(x) < 0 || max(x) > T)
         reject("gaussian_process::brownian_bridge_cov: need T > 0 and 0 <= x <= T");
     int N = size(x);
@@ -613,7 +614,7 @@ matrix brownian_bridge_cov(array[] real x, real sigma, real T){
 // @param sigma Diffusion standard deviation per unit time
 // @param T End time of the bridge (> 0)
 // @return N1 x N2 cross-covariance matrix
-matrix brownian_bridge_cross_cov(array[] real x1, array[] real x2, real sigma, real T){
+pub matrix brownian_bridge_cross_cov(array[] real x1, array[] real x2, real sigma, real T){
     if (T <= 0 || min(x1) < 0 || min(x2) < 0 || max(x1) > T || max(x2) > T)
         reject("gaussian_process::brownian_bridge_cross_cov: need T > 0 and 0 <= x <= T");
     int N1 = size(x1);
@@ -637,7 +638,7 @@ matrix brownian_bridge_cross_cov(array[] real x1, array[] real x2, real sigma, r
 // @param rho Correlation time (1 / mean-reversion rate)
 // @math k(x, x') = \alpha^2 \exp\left(-\frac{|x - x'|}{\rho}\right)
 // @return N x N covariance matrix
-matrix ornstein_uhlenbeck_cov(array[] real x, real alpha, real rho){
+pub matrix ornstein_uhlenbeck_cov(array[] real x, real alpha, real rho){
     return matern12_cov(x, alpha, rho);
 }
 // @laplace
@@ -647,7 +648,7 @@ matrix ornstein_uhlenbeck_cov(array[] real x, real alpha, real rho){
 // @param alpha Stationary standard deviation
 // @param rho Correlation time
 // @return N1 x N2 cross-covariance matrix
-matrix ornstein_uhlenbeck_cross_cov(array[] real x1, array[] real x2, real alpha, real rho){
+pub matrix ornstein_uhlenbeck_cross_cov(array[] real x1, array[] real x2, real alpha, real rho){
     return matern12_cross_cov(x1, x2, alpha, rho);
 }
 
@@ -659,7 +660,7 @@ matrix ornstein_uhlenbeck_cross_cov(array[] real x1, array[] real x2, real alpha
 // @param theta Mean-reversion rate of the underlying OU process (> 0)
 // @math k(s, t) = \frac{\alpha^2}{2\theta^3}\left(2\theta \min(s,t) + e^{-\theta s} + e^{-\theta t} - 1 - e^{-\theta |s - t|}\right)
 // @return N x N covariance matrix
-matrix integrated_ornstein_uhlenbeck_cov(array[] real x, real alpha, real theta){
+pub matrix integrated_ornstein_uhlenbeck_cov(array[] real x, real alpha, real theta){
     if (theta <= 0 || min(x) < 0)
         reject("gaussian_process::integrated_ornstein_uhlenbeck_cov: need theta > 0 and times >= 0");
     int N = size(x);
@@ -682,7 +683,7 @@ matrix integrated_ornstein_uhlenbeck_cov(array[] real x, real alpha, real theta)
 // @param alpha Diffusion scale of the underlying OU process
 // @param theta Mean-reversion rate (> 0)
 // @return N1 x N2 cross-covariance matrix
-matrix integrated_ornstein_uhlenbeck_cross_cov(array[] real x1, array[] real x2, real alpha, real theta){
+pub matrix integrated_ornstein_uhlenbeck_cross_cov(array[] real x1, array[] real x2, real alpha, real theta){
     if (theta <= 0 || min(x1) < 0 || min(x2) < 0)
         reject("gaussian_process::integrated_ornstein_uhlenbeck_cross_cov: need theta > 0 and times >= 0");
     int N1 = size(x1);
@@ -707,7 +708,7 @@ matrix integrated_ornstein_uhlenbeck_cross_cov(array[] real x1, array[] real x2,
 // @param sigma Noise standard deviation
 // @math k(x_i, x_j) = \sigma^2 \,\mathbf{1}[i = j]
 // @return N x N diagonal covariance matrix
-matrix white_cov(array[] real x, real sigma){
+pub matrix white_cov(array[] real x, real sigma){
     int N = size(x);
     return diag_matrix(rep_vector(square(sigma), N));
 }
@@ -717,7 +718,7 @@ matrix white_cov(array[] real x, real sigma){
 // @param x2 Second set of input locations (size N2)
 // @param sigma Noise standard deviation (unused; kept for a uniform signature)
 // @return N1 x N2 matrix of zeros
-matrix white_cross_cov(array[] real x1, array[] real x2, real sigma){
+pub matrix white_cross_cov(array[] real x1, array[] real x2, real sigma){
     return rep_matrix(0, size(x1), size(x2));
 }
 
@@ -728,7 +729,7 @@ matrix white_cross_cov(array[] real x1, array[] real x2, real sigma){
 // @param sigma Standard deviation of the shared offset
 // @math k(x, x') = \sigma^2
 // @return N x N covariance matrix
-matrix constant_cov(array[] real x, real sigma){
+pub matrix constant_cov(array[] real x, real sigma){
     int N = size(x);
     return rep_matrix(square(sigma), N, N);
 }
@@ -738,7 +739,7 @@ matrix constant_cov(array[] real x, real sigma){
 // @param x2 Second set of input locations (size N2)
 // @param sigma Standard deviation of the shared offset
 // @return N1 x N2 covariance matrix
-matrix constant_cross_cov(array[] real x1, array[] real x2, real sigma){
+pub matrix constant_cross_cov(array[] real x1, array[] real x2, real sigma){
     return rep_matrix(square(sigma), size(x1), size(x2));
 }
 
@@ -751,7 +752,7 @@ matrix constant_cross_cov(array[] real x1, array[] real x2, real sigma){
 // @math f = L z, \quad L L^\top = K + \delta I, \quad z \sim \mathcal{N}(0, I) \;\Rightarrow\; f \sim \mathcal{N}(0, K + \delta I)
 // @return Vector of latent function values, length N
 // @example vector[N] f = gaussian_process::latent(gaussian_process::matern52_cov(x, alpha, rho), z, 1e-9);
-vector latent(matrix K, vector z, real delta) {
+pub vector latent(matrix K, vector z, real delta) {
     return cholesky_decompose(add_diag(K, delta)) * z;
 }
 // @laplace
@@ -763,7 +764,7 @@ vector latent(matrix K, vector z, real delta) {
 // @math y \sim \mathcal{N}\left(\mu,\; K + \sigma^2 I\right)
 // @return Log density
 // @example y ~ gaussian_process::marginal_normal(rep_vector(0, N), gaussian_process::rbf_cov(x, alpha, rho), sigma);
-real marginal_normal_lpdf(vector y, vector mu, matrix K, real sigma){
+pub real marginal_normal_lpdf(vector y, vector mu, matrix K, real sigma){
     matrix[rows(K), cols(K)] L = cholesky_decompose(add_diag(K, square(sigma)));
     return multi_normal_cholesky_lpdf(y | mu, L);
 }
@@ -777,7 +778,7 @@ real marginal_normal_lpdf(vector y, vector mu, matrix K, real sigma){
 // @param sigma Observation noise standard deviation
 // @math \mathbb{E}[f_* \mid y] = K_\times^\top (K + \sigma^2 I)^{-1} y
 // @return Posterior mean, length N_new
-vector predict_marginal_mean(vector y, matrix K, matrix K_cross, real sigma){
+pub vector predict_marginal_mean(vector y, matrix K, matrix K_cross, real sigma){
     int N      = rows(K);
     int N_star = cols(K_cross);
     matrix[N, N] L        = cholesky_decompose(add_diag(K, square(sigma)));
@@ -794,7 +795,7 @@ vector predict_marginal_mean(vector y, matrix K, matrix K_cross, real sigma){
 // @param delta Diagonal jitter added to the predictive covariance
 // @math f_* \mid y \sim \mathcal{N}\left(K_\times^\top K_y^{-1} y,\; K_* - K_\times^\top K_y^{-1} K_\times\right), \quad K_y = K + \sigma^2 I
 // @return One draw of the noise-free f_*, length N_new; add normal_rng(f_*, sigma) for new observations
-vector predict_marginal_rng(vector y, matrix K, matrix K_cross, matrix K_star, real sigma, real delta){
+pub vector predict_marginal_rng(vector y, matrix K, matrix K_cross, matrix K_star, real sigma, real delta){
     int N      = rows(K);
     int N_star = cols(K_cross);
     matrix[N, N] L        = cholesky_decompose(add_diag(K, square(sigma)));
@@ -816,7 +817,7 @@ vector predict_marginal_rng(vector y, matrix K, matrix K_cross, matrix K_star, r
 // @param delta Jitter; use the same value as in gaussian_process::latent
 // @math f_* \mid f \sim \mathcal{N}\left(K_\times^\top K_\delta^{-1} f,\; K_* - K_\times^\top K_\delta^{-1} K_\times\right), \quad K_\delta = K + \delta I
 // @return One draw of f_*, length N_new
-vector predict_latent_rng(vector f, matrix K, matrix K_cross, matrix K_star, real delta){
+pub vector predict_latent_rng(vector f, matrix K, matrix K_cross, matrix K_star, real delta){
     int N      = rows(K);
     int N_star = cols(K_cross);
     matrix[N, N] L        = cholesky_decompose(add_diag(K, delta));
@@ -829,13 +830,13 @@ vector predict_latent_rng(vector f, matrix K, matrix K_cross, matrix K_star, rea
     return multi_normal_rng(mu_star, S);
 }
 
-// Grouping Helpers
+// Grouping Helpers ==============================================================================================================
 // @laplace
 // @brief Number of observations in each group
 // @param id Group index for each observation, values in 1..J
 // @param J Number of groups
 // @return Array of group sizes, length J
-array[] int group_sizes(array[] int id, int J) {
+pub array[] int group_sizes(array[] int id, int J) {
     int N = size(id);
     array[J] int sizes;
     sizes = rep_array(0, J);
@@ -852,7 +853,7 @@ array[] int group_sizes(array[] int id, int J) {
 // @param sizes Group sizes, length J (from group_sizes)
 // @math s_1 = 1, \quad s_j = s_{j-1} + n_{j-1}
 // @return Array of start positions, length J
-array[] int group_starts(array[] int sizes) {
+pub array[] int group_starts(array[] int sizes) {
     int J = size(sizes);
     array[J] int starts;
     starts[1] = 1;
@@ -871,6 +872,6 @@ array[] int group_starts(array[] int sizes) {
 // @param j Group index
 // @return Array of row indices for group j, length sizes[j]
 // @example f[idx] = gaussian_process::latent(gaussian_process::rbf_cov(x[idx], alpha[j], rho[j]), z[idx], delta);
-array[] int group_rows(array[] int ord, array[] int starts, array[] int sizes, int j){
+pub array[] int group_rows(array[] int ord, array[] int starts, array[] int sizes, int j){
     return ord[starts[j]:(starts[j] + sizes[j] - 1)];
 }

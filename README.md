@@ -376,7 +376,7 @@ fit$draws("f_new")
 
 ## Things to know
 
-- **Use `target +=`, not `~`.** Laplace rewrites `gaussian_process::func(` calls, so write `target += gaussian_process::marginal_normal_lpdf(y | ...)`. The `y ~ gaussian_process::marginal_normal(...)` form won't resolve.
+- **`~` and `target +=` both work.** `y ~ gaussian_process::marginal_normal(...);` compiles to `y ~ gaussian_process__marginal_normal(...)`, which Stan resolves to `gaussian_process__marginal_normal_lpdf` like any user-defined distribution. Prefer `target += gaussian_process::marginal_normal_lpdf(y | ...);` when you need the full log density (for example to compare models), since `~` lets Stan drop constant terms.
 - **Multiply kernels with `.*`, never `*`.** Between two matrices, `*` is a matrix product, which is not a kernel product and gives a wrong, usually invalid, covariance.
 - **In a product, only one amplitude is identified.** $\alpha\_1 \alpha\_2$ is all the data can see, so set every amplitude but one to `1.0`, as `local_periodic` and `rq_periodic` already do. Otherwise the sampler drifts along a ridge where one amplitude grows as the other shrinks.
 - **Prediction needs the kernel written three times** — `K`, `K_cross`, and `K_star` — with the same kernel and hyperparameters as in `model`. The library can't check this for you, since Stan can't pass functions as arguments.
